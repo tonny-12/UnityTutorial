@@ -201,7 +201,7 @@ Now, press the **Play** button, and the **Food** should spawn within the walls.
 
 ![image10](https://user-images.githubusercontent.com/13974892/26974782-e6e71e16-4cea-11e7-9fc5-ad20491dfa14.png)
 
-### Save!
+# Save!
 
 ### Creating the Snake's Head
 Like before, drag the pixel.png to the current **Scene**'s **Hierarchy** or the **Scene** itself. The pixel.png will be renamed **Head**, colored in **Green**, and given a **Box Collider 2D** (**Is Trigger** is **disabled**). This time around, we will change the (x,y) Size for the **Box Collider 2D** to **(0.7,0.7)**, so the **Head** will not collide with the growing **Tail** right next to it. 
@@ -308,42 +308,203 @@ If we save the current script and **Play** without any errors, we should see the
 
 ### Snake's Tail Movement
 
+### Snake's Tail Movement
+Before proceeding with implementing the code for the Snake's **Tail**, there is a potential problem that may cause more work, time, and problems.
+
+Let's take a look at a Snake with the **Head** and 4 **Tail** elements being represented below:
+
+`OOOOX`
+
+How would this Snake move if the **Head** goes to the right? The answer would obviously be:
+
+```
+OOOOX           \\ Step 0: initial Snake
+OOOO X          \\ Step 1: Snake Head moves right one
+OOO OX          \\ Step 2: Snake Tail moves right one
+OO OOX          \\ Step 3: Snake Tail moves right one
+O OOOX          \\ Step 4: Snake Tail moves right one
+ OOOOX          \\ Step 5: Snake Tail moves right one
+```
+
+As you can see, the **Head** moves once and then _every_ **Tail** element moves onces as well.
+The next question: Should you implement the Snake's Tail movement this way?
+
+From how the question was worded, you can probably guess the answer would be: No
+Why not? Snake is a fairly simple game, so if a player manages to have a Snake with 1000 **Tail** elements, _every_ **Tail** element would need to move once. This may not seem like a huge problem since today's computers are pretty powerful, but implementing the **Tail**'s behavior this way would use up time and resources which can easily be remedied.
+
+The provided solution may not be the _best_ solution but it is definitely a better solution. The same example will be used. 
+
+```
+OOOOX           \\ Step 0: initial Snake
+OOOO X          \\ Step 1: Snake Head moves right one
+^---^           \\         Movement to gap
+ OOOOX          \\ Step 2: Snake Tail moves to the gap
+```
+
+This approach basically takes the last **Tail** element and moves it to the gap created when the **Head** moves. This solution is clearly less computationally intensive and saves time (less steps). With this solution in mind, we will begin implementing the Snake's **Tail** movement.
+
+### Completing the Snake's Movement
+We will be using the `List` data structure to implement the solution. The `List` data structure is pretty self-explanatory. It holds a list of elements that can be manipulated using the `using System.Linq;` we added to the top of the **Snake Script** earlier. 
+
+Now, we will add one `public` variable and one `private` variable for the solution. `public GameObject tailPrefab` for the **Tail Prefab** since it will be used in a very similar manner as the **Food Prefab**. `private List<Transform> tailList` for the **List** of the **Tail**s' **Transform**s. In `Start()`, we will instantiate the `tailList` by doing `tailList = new List<Transform>();`.
+
+```
+    // Snake's Tail Prefab for eating Food
+	public GameObject tailPrefab;
+	
+	// keeping track of the tail
+	private List<Transform> tailList = new List<Transform>();
+	
+	// Use this for initialization 
+	void Start () {
+    	// initastiating the List
+		tailList = new List<Transform>();
+
+        // Snake starts moving to the right
+        direction = Vector2.right;
+
+		// Snake moves every 100ms by calling the Move() function
+        InvokeRepeating("Move", 0.1f, 0.1f);
+	}
+```
+
+In order to implement the solution, we first need to save the Head's current position before the `transform.Translate(direction)` moves since this would be the position of the gap that is created. The `if` statement is for checking if the Snake has a Tail because the solution would not work if the Snake does not have at least one Tail (no Tail to swap to the gap). The rest of the code does exactly what the solution does.
+	
+```
+    // Move used to move the Snake
+    void Move()
+    {
+		// save current position of the Snake's Head
+		Vector2 v = transform.position;
+
+		// move Snake's Head one space based on the new direction (creates gap)
+        transform.Translate(direction);
+        
+        if (tailList.Count > 0) 
+		{
+			// move last Tail element to where the Head was (fills gap)
+			tailList.Last ().position = v;
+
+			// add Tail to the front of the list
+			tailList.Insert (0, tailList.Last ());
+
+			// remove Tail from the back of the list
+			tailList.RemoveAt (tailList.Count - 1);
+		}
+```
+
+### Feeding the Snake
+In order to grow the Snake's **Tail**, we will be using the `OnTriggerEnter2D()` function which executes the function's code when a collision information is recieved by using the enabled **Is Trigger** property of the **Box Collider 2D**. We will also be extending the solution we came up with; when the Snake eats **Food**, the **Tail** will get added to the gap rather than the end of the Snake. Before going to the `OnTriggerEnter2D()` function, we will need to add a `private bool ate`, a true and false flag to check if the Snake ate **Food**.
+
+```
+	// flag for checking if the Snake ate Food
+	private bool ate = false;
+
+	// Use this for initialization 
+	void Start () {
+        // Snake starts with being hungry
+		ate = false;
+
+		// initalize the List
+		tailList = new List<Transform>();
+
+        // Snake starts moving to the right
+        direction = Vector2.right;
+
+		// Snake moves every 100ms by calling the Move() function
+        InvokeRepeating("Move", 0.1f, 0.1f);
+	}
+```
+
+The `OnTriggerEnter2D()` function is a special function like `Start()` and `Update()` since Unity automatically calls them when the game is running. The argument `Collider2D other` is the other **GameObject** with **Is Trigger** enabled. Along with using the **Food Tag** from earlier, we can check if the other **GameObject** has the **Food Tag**, this will set the `ate` flag to true and destroy the **Food Prefab**, otherwise, the **Head** would be destroyed for colliding with anything else. 
+
+```
+	// Trigger event when another object collides with this object
+	void OnTriggerEnter2D(Collider2D other) 
+	{	
+		// checks to see if collided object has the Food tag
+		if (other.CompareTag("Food"))
+		{	
+			// set ate flag to true
+			ate = true;
+			// destroy the Food
+			Destroy (other.gameObject);
+		}
+        // Snake is detroyed if collided with any other object
+		else 
+		{
+			Destroy (gameObject);
+		}
+	}
+```
+
+Now, we will utilize the `ate` flag in the `Move()` function where we are already modifying the Snake's **Tail**. If the `ate` flag is true, we just need to instantiate the Tail much like the instantiating the Food earlier. In addition, we will need to add this Tail to the list and reset the `ate` flag.
+
+```
+	// Move used to move the Snake
+    void Move()
+    {
+		// save current position of the Snake's Head
+		Vector2 v = transform.position;
+
+		// move Snake's Head one space based on the new direction (gap)
+        transform.Translate(direction);
+
+		// check if the ate flag is true
+		if (ate) {
+			// loads the Tail Prefab to be placed where the Snake's Head was (fills gap)
+			GameObject gameObject = (GameObject)Instantiate (tailPrefab, v, Quaternion.identity);
+
+			// adds the loaded Tail Prefab to the Tail list
+			tailList.Insert (0, gameObject.transform);
+
+			// Snake finished eating setting ate flag back to false
+			ate = false;
+		}
+		// check if the Snake have a Tail
+		else if (tailList.Count > 0) 
+		{
+			// move last Tail element to where the Head was
+			tailList.Last ().position = v;
+
+			// add Tail to the front of the list
+			tailList.Insert (0, tailList.Last ());
+
+			// remove Tail from the back of the list
+			tailList.RemoveAt (tailList.Count - 1);
+		}
+    }
+```
 
 Final **Snake Script**:
+_Note: The Script below contains additional code not detailed in the README. This code is commented out for that reason._
 ```
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
-using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 public class Snake : MonoBehaviour {
 
 	// direction of Snake's movement
     private Vector2 direction;
 
+    // Snake's Tail Prefab for eating Food
+	public GameObject tailPrefab;
+	
 	// keeping track of the tail
 	private List<Transform> tailList = new List<Transform>();
 
 	// flag for checking if the Snake ate Food
 	private bool ate = false;
 
-	// Snake's Tail Prefab for eating Food
-	public GameObject tailPrefab;
-
-	public Text gameOverText;
-	public Text restartText;
-
-	private bool gameOver;
-	private bool restart;
-
 	// Use this for initialization 
 	void Start () {
-		gameOver = false;
-		restart = false;
-		gameOverText.text = "";
-		restartText.text = "";
+        // Snake starts with being hungry
+		ate = false;
+
+		// initalize the List
+		tailList = new List<Transform>();
 
         // Snake starts moving to the right
         direction = Vector2.right;
@@ -371,16 +532,6 @@ public class Snake : MonoBehaviour {
         {
             direction = Vector2.down;
         }
-
-		if (restart) {
-			if (Input.GetKeyDown (KeyCode.Space)) {
-				SceneManager.LoadScene (SceneManager.GetActiveScene ().buildIndex);
-			}
-		}
-		if (gameOver) {
-			restartText.text = "Press Space for Restart";
-			restart = true;
-		}
     }
 
 	// Move used to move the Snake
@@ -415,7 +566,6 @@ public class Snake : MonoBehaviour {
 			// remove Tail from the back of the list
 			tailList.RemoveAt (tailList.Count - 1);
 		}
-
     }
 
 	// Trigger event when another object collides with this object
@@ -429,31 +579,22 @@ public class Snake : MonoBehaviour {
 			// destroy the Food
 			Destroy (other.gameObject);
 		}
-		// game ends if collided with any other object
+        // Snake is detroyed if collided with any other object
 		else 
 		{
-			gameOver = true;
+			Destroy (gameObject);
 		}
 	}
 }
 ```
 
+### PLAY SNAKE!
 
+![image13](https://user-images.githubusercontent.com/13974892/27015438-a88dc73a-4edb-11e7-815f-12a669d085ea.png)
 
+# CTRL+S
 
+### Building the Game
+Simply go to **File->Build Settings**, selected **PC** as the **Platform**, add the **Snake Scene** to **Scenes In Build** and click **Build** or **Build And Run**
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+![image14](https://user-images.githubusercontent.com/13974892/27015439-aa7dcf04-4edb-11e7-8a68-84280a166a5b.png)
